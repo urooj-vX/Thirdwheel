@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Shrugging / Uncertain doodle -->
+  <circle cx="60" cy="35" r="14" stroke="#1C1917" stroke-width="2.5" fill="#FAF8F5"/>
+  <circle cx="55" cy="33" r="1.5" fill="#1C1917"/>
+  <circle cx="65" cy="33" r="1.5" fill="#1C1917"/>
+  <!-- Straight neutral mouth -->
+  <path stroke="#1C1917" stroke-width="2" d="M 54 42 L 66 42"/>
+  <!-- Shrugging arms raised -->
+  <path stroke="#1C1917" stroke-width="2.5" d="M 60 49 L 60 85 M 60 58 Q 35 50 25 35 M 60 58 Q 85 50 95 35"/>
+  <path stroke="#C85A32" stroke-width="2" d="M 20 28 Q 25 20 30 28 M 90 28 Q 95 20 100 28"/>
+</svg>

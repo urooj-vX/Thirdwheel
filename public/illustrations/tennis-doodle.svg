@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Hand-drawn tennis racket -->
+  <ellipse cx="26" cy="24" rx="14" ry="16" stroke="#1C1917" stroke-width="2" fill="#FAF8F5"/>
+  <path stroke="#E6DFD5" stroke-width="1" d="M 26 8 L 26 40 M 12 24 L 40 24 M 16 16 L 36 32 M 16 32 L 36 16" />
+  <path stroke="#1C1917" stroke-width="2.5" d="M 36 35 L 50 52" />
+  <circle cx="48" cy="18" r="4" stroke="#C85A32" stroke-width="2" fill="#F4EFEA"/>
+</svg>

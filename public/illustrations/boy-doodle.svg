@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Boy Doodle - Hand-drawn line art style -->
+  <path stroke="#1C1917" stroke-width="2.5" d="M 45 42 C 45 28, 62 25, 75 32 C 85 28, 98 35, 95 48 C 102 58, 92 72, 80 70 C 65 75, 45 62, 45 42 Z" />
+  <!-- Hair & Face details -->
+  <path stroke="#1C1917" stroke-width="2.5" d="M 50 35 C 55 22, 75 20, 85 28 C 92 24, 98 32, 92 40" fill="#1C1917"/>
+  <!-- Eye & Smile -->
+  <circle cx="65" cy="48" r="2.5" fill="#1C1917" />
+  <path stroke="#1C1917" stroke-width="2" d="M 62 58 Q 70 64 78 57" />
+  <!-- Body & Torso leaning right -->
+  <path stroke="#1C1917" stroke-width="2.5" d="M 60 72 Q 40 100 35 130 C 45 135, 80 135, 90 130 Q 80 100 75 72" />
+  <!-- Arm pointing/reaching right -->
+  <path stroke="#1C1917" stroke-width="2.5" d="M 75 85 Q 110 80 135 70" />
+  <path stroke="#1C1917" stroke-width="2" d="M 135 70 Q 142 68 145 74 Q 140 78 132 78" />
+  <!-- Terracotta accent note -->
+  <path stroke="#C85A32" stroke-width="2.5" d="M 115 50 Q 125 40 135 45" />
+</svg>

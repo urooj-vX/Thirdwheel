@@ -44,18 +44,16 @@ export function AddPersonModal({ isOpen, onClose, onAddPerson }: AddPersonModalP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1C1B1A]/40 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-2xl border border-[#E6E1DA] bg-[#FBF9F5] p-6 sm:p-8 shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#E6E1DA] pb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1C1917]/50 backdrop-blur-xs p-4 animate-fade-in">
+      <div className="w-full max-w-md rounded-lg border border-[#E7E1D8] bg-[#FAF8F5] p-6 sm:p-8 shadow-xl">
+        <div className="flex items-center justify-between border-b border-[#E7E1D8] pb-4">
           <div>
-            <h3 className="font-serif text-2xl font-medium text-[#1C1B1A]">Add person</h3>
-            <p className="text-xs text-[#6E6A63] mt-0.5 font-sans">
-              Create a private journal space for someone in your life.
-            </p>
+            <span className="text-[10px] font-mono tracking-widest text-[#C85A32] uppercase">DOSSIER CREATION</span>
+            <h3 className="font-serif text-2xl font-medium text-[#1C1917] mt-0.5">Add person</h3>
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1.5 text-[#6E6A63] hover:bg-[#E6E1DA]/50 hover:text-[#1C1B1A] transition"
+            className="rounded-full p-1.5 text-[#78716C] hover:bg-[#E7E1D8]/60 hover:text-[#1C1917] transition"
           >
             <X className="h-4 w-4" />
           </button>
@@ -63,33 +61,33 @@ export function AddPersonModal({ isOpen, onClose, onAddPerson }: AddPersonModalP
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-5">
           {error && (
-            <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-700">
+            <div className="rounded-md bg-rose-500/10 border border-rose-500/20 p-3 text-xs font-mono text-rose-800">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-[#6E6A63] uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-mono text-[#78716C] uppercase tracking-wider mb-1.5">
               Name / Alias *
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Arjun, Maya, Sam..."
+              placeholder="e.g. Arjun, Rahul, Maya..."
               required
-              className="w-full rounded-xl border border-[#E6E1DA] bg-white px-4 py-2.5 text-sm text-[#1C1B1A] placeholder-[#A09B93] focus:border-[#C85A32] focus:outline-none focus:ring-1 focus:ring-[#C85A32]/30 transition"
+              className="w-full rounded-md border border-[#E7E1D8] bg-[#FFFFFF] px-4 py-2.5 text-sm text-[#1C1917] placeholder-[#A8A29E] focus:border-[#C85A32] focus:outline-none focus:ring-1 focus:ring-[#C85A32]/30 transition"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#6E6A63] uppercase tracking-wider mb-1.5">
-              Relationship / Status
+            <label className="block text-xs font-mono text-[#78716C] uppercase tracking-wider mb-1.5">
+              Relationship Context
             </label>
             <select
               value={relationshipStatus}
               onChange={(e) => setRelationshipStatus(e.target.value as any)}
-              className="w-full rounded-xl border border-[#E6E1DA] bg-white px-4 py-2.5 text-sm text-[#1C1B1A] focus:border-[#C85A32] focus:outline-none focus:ring-1 focus:ring-[#C85A32]/30 transition cursor-pointer"
+              className="w-full rounded-md border border-[#E7E1D8] bg-[#FFFFFF] px-4 py-2.5 text-sm text-[#1C1917] focus:border-[#C85A32] focus:outline-none focus:ring-1 focus:ring-[#C85A32]/30 transition cursor-pointer"
             >
               <option value="talking">Talking</option>
               <option value="dating">Dating</option>
@@ -100,15 +98,15 @@ export function AddPersonModal({ isOpen, onClose, onAddPerson }: AddPersonModalP
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#6E6A63] uppercase tracking-wider mb-1.5">
-              Short Context (Optional)
+            <label className="block text-xs font-mono text-[#78716C] uppercase tracking-wider mb-1.5">
+              Initial Note (Optional)
             </label>
             <textarea
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              placeholder="e.g. Met on Hinge, mutual friend Alex..."
+              placeholder="e.g. Coffee near campus..."
               rows={2}
-              className="w-full rounded-xl border border-[#E6E1DA] bg-white px-4 py-2.5 text-sm text-[#1C1B1A] placeholder-[#A09B93] focus:border-[#C85A32] focus:outline-none focus:ring-1 focus:ring-[#C85A32]/30 transition"
+              className="w-full rounded-md border border-[#E7E1D8] bg-[#FFFFFF] px-4 py-2.5 text-sm text-[#1C1917] placeholder-[#A8A29E] focus:border-[#C85A32] focus:outline-none focus:ring-1 focus:ring-[#C85A32]/30 transition font-serif"
             />
           </div>
 
@@ -116,16 +114,16 @@ export function AddPersonModal({ isOpen, onClose, onAddPerson }: AddPersonModalP
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-[#E6E1DA] bg-white px-5 py-2 text-xs font-medium text-[#6E6A63] hover:bg-[#F2ECE4] hover:text-[#1C1B1A] transition"
+              className="rounded-md border border-[#E7E1D8] bg-[#FAF8F5] px-5 py-2 text-xs font-mono uppercase tracking-wider text-[#78716C] hover:bg-[#F4EFEA] hover:text-[#1C1917] transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-full bg-[#C85A32] hover:bg-[#B34E29] px-5 py-2 text-xs font-medium text-white transition disabled:opacity-50 shadow-sm"
+              className="rounded-md bg-[#1C1917] hover:bg-[#332F2B] px-6 py-2 text-xs font-mono uppercase tracking-wider text-[#FAF8F5] transition disabled:opacity-50 shadow-xs"
             >
-              {isSubmitting ? 'Saving...' : 'Save person'}
+              {isSubmitting ? 'Saving...' : 'Create journal'}
             </button>
           </div>
         </form>
@@ -133,4 +131,5 @@ export function AddPersonModal({ isOpen, onClose, onAddPerson }: AddPersonModalP
     </div>
   );
 }
+
 

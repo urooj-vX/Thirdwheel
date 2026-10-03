@@ -17,47 +17,72 @@ export function PersonCard({ person, isActive, onSelect }: PersonCardProps) {
 
   const totalReceipts = person.factCount + person.assumptionCount + person.uncertaintyCount;
 
+  // Determine doodle icon based on name
+  const isArjun = person.name.toLowerCase().includes('arjun');
+  const isRahul = person.name.toLowerCase().includes('rahul');
+  const doodleSrc = isArjun
+    ? '/illustrations/coffee-doodle.svg'
+    : isRahul
+    ? '/illustrations/tennis-doodle.svg'
+    : '/illustrations/third-wheel-mascot.svg';
+
   return (
     <div
       onClick={() => onSelect(person.person_id)}
-      className={`group cursor-pointer rounded-2xl border bg-white p-6 sm:p-7 transition-all duration-200 ${
+      className={`group cursor-pointer rounded-lg border p-6 sm:p-7 transition-all duration-200 ${
         isActive
-          ? 'border-[#C85A32] shadow-sm ring-1 ring-[#C85A32]/20'
-          : 'border-[#E6E1DA] hover:border-[#C85A32]/40 hover:shadow-sm'
+          ? 'bg-[#F4EFEA] border-[#C85A32] shadow-xs ring-1 ring-[#C85A32]/20'
+          : 'bg-[#FFFFFF] border-[#E7E1D8] hover:border-[#C85A32]/50 hover:bg-[#FAF8F5]'
       }`}
     >
-      {/* Name and Status Header */}
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-serif text-2xl font-medium tracking-tight text-[#1C1B1A] group-hover:text-[#C85A32] transition">
-          {person.name}
-        </h3>
-        {person.relationship_status && (
-          <span className="text-xs font-sans text-[#6E6A63] capitalize">
-            {person.relationship_status}
-          </span>
-        )}
+      {/* Header: Name, Doodle Motif & Status */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-[#FAF8F5] border border-[#E7E1D8] flex items-center justify-center p-1.5 shrink-0 group-hover:border-[#C85A32]/40 transition">
+            <img src={doodleSrc} alt={person.name} className="w-full h-full object-contain opacity-85" />
+          </div>
+          <div>
+            <h3 className="font-serif text-2xl font-medium tracking-tight text-[#1C1917] group-hover:text-[#C85A32] transition">
+              {person.name}
+            </h3>
+            {person.relationship_status && (
+              <span className="text-[11px] font-mono tracking-wider text-[#78716C] uppercase">
+                {person.relationship_status}
+              </span>
+            )}
+          </div>
+        </div>
+        
+        <span className="text-[11px] font-mono text-[#A8A29E] uppercase tracking-wider">
+          {formattedDate}
+        </span>
       </div>
 
-      {/* Meaningful Recent Receipt / Quote */}
-      <div className="my-5 min-h-[3.5rem] flex items-center">
+      {/* Note Fragment */}
+      <div className="my-5 min-h-[3.25rem] flex items-center">
         {person.summary ? (
-          <blockquote className="font-serif italic text-sm text-[#3E3B36] leading-relaxed line-clamp-2">
+          <p className="font-serif italic text-sm text-[#4D4540] leading-relaxed line-clamp-2 border-l-2 border-[#C85A32]/40 pl-3">
             &ldquo;{person.summary}&rdquo;
-          </blockquote>
+          </p>
         ) : (
-          <p className="font-serif italic text-sm text-[#A09B93]">
+          <p className="font-serif italic text-xs text-[#A8A29E] border-l-2 border-[#E7E1D8] pl-3">
             No receipts logged yet for {person.name}.
           </p>
         )}
       </div>
 
-      {/* Subtle Meta Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-[#F2ECE4] text-xs text-[#6E6A63]">
-        <span>{totalReceipts} {totalReceipts === 1 ? 'receipt' : 'receipts'}</span>
-        <span>{formattedDate}</span>
+      {/* Editorial Meta Footer */}
+      <div className="flex items-center justify-between pt-4 border-t border-[#E7E1D8]/60 text-xs font-mono text-[#78716C]">
+        <span className="uppercase tracking-wider">
+          {totalReceipts} {totalReceipts === 1 ? 'receipt' : 'receipts'}
+        </span>
+        <span className="group-hover:translate-x-1 text-[#C85A32] font-sans font-medium transition-transform inline-flex items-center gap-1">
+          Open Journal &rarr;
+        </span>
       </div>
     </div>
   );
 }
+
 
 

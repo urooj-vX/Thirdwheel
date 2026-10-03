@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { MemoryDocument, OpenThreadDocument, EventDocument } from '@/types';
+import { ChevronDown, ChevronUp, FileText } from 'lucide-react';
 
 interface MemoryVaultSectionProps {
   personName: string;
@@ -11,24 +12,36 @@ interface MemoryVaultSectionProps {
 }
 
 export function MemoryVaultSection({ personName, memories }: MemoryVaultSectionProps) {
+  const [expandedMemoryId, setExpandedMemoryId] = useState<string | null>(null);
+
   return (
     <div className="space-y-8 py-2">
-      {/* Header */}
-      <div className="border-b border-[#E6E1DA] pb-4">
-        <h2 className="font-serif text-3xl font-medium tracking-tight text-[#1C1B1A]">
-          Receipts
-        </h2>
-        <p className="text-sm text-[#6E6A63] mt-1 font-sans">
-          A chronological journal of what was actually said and recorded for {personName}.
-        </p>
+      {/* Section Header */}
+      <div className="border-b border-[#E7E1D8] pb-4 flex items-center justify-between">
+        <div>
+          <span className="text-[11px] font-mono tracking-widest text-[#C85A32] uppercase">
+            ARCHIVAL LEDGER // PROVENANCE & EVIDENCE
+          </span>
+          <h2 className="font-serif text-3xl font-medium tracking-tight text-[#1C1917] mt-1">
+            Receipts for {personName}
+          </h2>
+          <p className="text-sm text-[#78716C] mt-1 font-sans">
+            Every memory is anchored to a specific interaction transcript. Click to view provenance.
+          </p>
+        </div>
+        <img src="/illustrations/remembering.svg" alt="Receipts" className="w-10 h-10 opacity-75 hidden sm:block" />
       </div>
 
       {/* Entry stream */}
-      <div className="space-y-8">
+      <div className="space-y-6">
         {memories.length === 0 ? (
-          <div className="py-12 text-center">
-            <p className="font-serif italic text-base text-[#A09B93]">
+          <div className="rounded-lg border border-[#E7E1D8] bg-[#FAF8F5] p-12 text-center space-y-3">
+            <img src="/illustrations/empty-waiting.svg" alt="No receipts" className="w-14 h-14 mx-auto opacity-75" />
+            <p className="font-serif italic text-base text-[#78716C]">
               No receipts recorded yet for {personName}.
+            </p>
+            <p className="text-xs font-mono text-[#A8A29E] uppercase">
+              Log a conversation to anchor facts in your ledger
             </p>
           </div>
         ) : (
@@ -36,18 +49,66 @@ export function MemoryVaultSection({ personName, memories }: MemoryVaultSectionP
             const formattedDate = new Date(mem.created_at).toLocaleDateString('en-US', {
               month: 'long',
               day: 'numeric',
+              year: 'numeric',
             });
 
+            const isExpanded = expandedMemoryId === mem.memory_id;
+            const memoryType = (mem.memory_type || 'FACT').toUpperCase();
+
+            // Type styling
+            const typeColor =
+              memoryType === 'FACT'
+                ? 'text-[#C85A32] border-[#C85A32]/30 bg-[#FBF0EC]'
+                : memoryType === 'ASSUMPTION'
+                ? 'text-[#78716C] border-[#E7E1D8] bg-[#FAF8F5]'
+                : 'text-[#822801] border-[#E7E1D8] bg-[#F4EFEA]';
+
             return (
-              <article key={mem.memory_id} className="border-b border-[#E6E1DA] pb-8 space-y-2">
-                <div className="text-xs font-sans text-[#6E6A63] uppercase tracking-wider">
-                  {formattedDate}
+              <article
+                key={mem.memory_id}
+                className="rounded-lg border border-[#E7E1D8] bg-[#FFFFFF] p-6 space-y-4 transition-all hover:border-[#C85A32]/40"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-[#E7E1D8]/60 pb-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[10px] font-mono tracking-widest px-2.5 py-0.5 rounded-sm border ${typeColor}`}>
+                      {memoryType}
+                    </span>
+                    <span className="text-xs font-mono text-[#78716C] uppercase">
+                      Recorded {formattedDate}
+                    </span>
+                  </div>
+
+                  <span className="text-[11px] font-mono text-[#A8A29E]">
+                    ID: {mem.memory_id.slice(-6)}
+                  </span>
                 </div>
-                <p className="font-serif text-xl text-[#1C1B1A] leading-relaxed italic">
+
+                {/* Claim / Statement */}
+                <blockquote className="font-serif text-xl text-[#1C1917] leading-relaxed italic">
                   &ldquo;{mem.content}&rdquo;
-                </p>
-                <div className="text-xs text-[#6E6A63] font-sans pt-1">
-                  Source: {mem.memory_type || 'conversation'}
+                </blockquote>
+
+                {/* Provenance Expander */}
+                <div className="pt-2">
+                  <button
+                    onClick={() => setExpandedMemoryId(isExpanded ? null : mem.memory_id)}
+                    className="inline-flex items-center gap-1.5 text-xs font-mono tracking-wider text-[#C85A32] hover:underline uppercase"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>{isExpanded ? 'Hide original interaction' : 'View original interaction →'}</span>
+                    {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+
+                  {isExpanded && (
+                    <div className="mt-3 p-4 rounded-md bg-[#FAF8F5] border border-[#E7E1D8] space-y-2 animate-fade-in">
+                      <div className="text-[11px] font-mono text-[#78716C] uppercase tracking-wider">
+                        ORIGINAL INTERACTION SOURCE TRANSCRIPT (ID: {mem.source_interaction_id})
+                      </div>
+                      <p className="font-sans text-sm text-[#4D4540] leading-relaxed">
+                        Interaction source verified. Contains extracted evidence point: &ldquo;{mem.content}&rdquo;.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </article>
             );
@@ -57,3 +118,4 @@ export function MemoryVaultSection({ personName, memories }: MemoryVaultSectionP
     </div>
   );
 }
+

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Girl Doodle - Hand-drawn line art leaning on letter -->
+  <!-- Hair bun & head -->
+  <circle cx="85" cy="28" r="12" fill="#1C1917" />
+  <path stroke="#1C1917" stroke-width="2.5" d="M 72 45 C 68 32, 85 28, 95 38 C 102 46, 92 60, 80 58 C 70 60, 68 50, 72 45 Z" />
+  <!-- Eye & Smile looking left -->
+  <circle cx="80" cy="46" r="2.5" fill="#1C1917" />
+  <path stroke="#1C1917" stroke-width="2" d="M 76 54 Q 82 58 88 53" />
+  <!-- Body leaning back left -->
+  <path stroke="#1C1917" stroke-width="2.5" d="M 80 58 C 90 75, 105 95, 110 125 C 95 130, 70 130, 60 125 C 68 95, 75 75, 80 58" />
+  <!-- Arm resting back -->
+  <path stroke="#1C1917" stroke-width="2.5" d="M 85 70 Q 40 75 25 65" />
+  <path stroke="#1C1917" stroke-width="2" d="M 25 65 Q 18 62 15 68 Q 20 72 28 72" />
+  <!-- Raised Leg at 75 degrees as noted in sketch -->
+  <path stroke="#1C1917" stroke-width="2.5" d="M 70 110 Q 45 90 30 70" />
+  <!-- Terracotta accent hair ribbon -->
+  <path stroke="#C85A32" stroke-width="3" d="M 85 16 C 88 10, 94 10, 96 16" />
+</svg>
