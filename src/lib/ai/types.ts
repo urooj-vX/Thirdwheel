@@ -11,6 +11,7 @@ export interface ExtractionInput {
 export interface RealityCheckAIInput {
   query: string;
   context: PersonContext;
+  newMessageContent?: string;
 }
 
 export interface AIProvider {
