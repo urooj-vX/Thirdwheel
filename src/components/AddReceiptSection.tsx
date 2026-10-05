@@ -53,7 +53,7 @@ export function AddReceiptSection({ personId, personName, onInteractionIngested 
   };
 
   const handleInsertDemoText = () => {
-    setContent('Arjun mentioned wanting to try the coffee shop near campus.');
+    setContent('Rakesh mentioned wanting to try the coffee shop near campus.');
   };
 
   return (
