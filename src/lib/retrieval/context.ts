@@ -62,7 +62,7 @@ export async function retrievePersonContext(
   return {
     personId: person.person_id,
     personName: person.name,
-    relationshipStatus: person.relationship_status,
+    relationshipStatus: person.relationship_label || person.relationship_status || '',
     summary: person.summary,
     facts: facts.map((m) => m.content),
     assumptions: assumptions.map((m) => m.content),
