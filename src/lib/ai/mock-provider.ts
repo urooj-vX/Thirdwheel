@@ -11,7 +11,9 @@ export class MockAIProvider implements AIProvider {
    * Deterministic mock extractor for testing without live Gemma API calls.
    */
   async extractInteraction(input: ExtractionInput): Promise<ExtractionResult> {
+    const tStart = performance.now();
     const text = input.rawContent;
+    const promptLen = text.length;
 
     const result: ExtractionResult = {
       facts: [],
@@ -87,6 +89,8 @@ export class MockAIProvider implements AIProvider {
       });
     }
 
+    const duration = performance.now() - tStart;
+    console.log(`[TIMING] [AI Model] extractInteraction | Model: mock-gemma-2b | Prompt Chars: ${promptLen} (~${Math.round(promptLen / 4)} tokens) | Duration: ${duration.toFixed(2)}ms | Retries: 0`);
     return ExtractionResultSchema.parse(result);
   }
 
@@ -94,6 +98,7 @@ export class MockAIProvider implements AIProvider {
    * Deterministic mock Reality Check engine for testing.
    */
   async runRealityCheck(input: RealityCheckAIInput): Promise<RealityCheckResult> {
+    const tStart = performance.now();
     const ctx = input.context;
     const queryLower = input.query.toLowerCase();
 
@@ -124,6 +129,10 @@ export class MockAIProvider implements AIProvider {
           : `Based on recorded memories, ${ctx.personName} has discussed ${ctx.facts.slice(0, 2).join(', ')}.`,
       closing_quote: 'Go drink some water and put down your phone! 😂',
     };
+
+    const duration = performance.now() - tStart;
+    const promptLen = (input.query + (ctx.facts.join(' ') || '')).length;
+    console.log(`[TIMING] [AI Model] runRealityCheck | Model: mock-gemma-2b | Prompt Chars: ${promptLen} (~${Math.round(promptLen / 4)} tokens) | Duration: ${duration.toFixed(2)}ms | Retries: 0`);
 
     return RealityCheckResultSchema.parse(result);
   }
