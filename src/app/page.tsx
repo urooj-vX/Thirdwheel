@@ -1,32 +1,65 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import gsap from 'gsap';
 import { Header } from '@/components/Header';
 import { PersonCard } from '@/components/PersonCard';
+import { getAvatarForPerson } from '@/lib/avatars';
 import { AddPersonModal } from '@/components/AddPersonModal';
-import { AddReceiptSection } from '@/components/AddReceiptSection';
-import { RealityCheckSection } from '@/components/RealityCheckSection';
-import { MemoryVaultSection } from '@/components/MemoryVaultSection';
+import { ConfirmationModal } from '@/components/ConfirmationModal';
+import { AwwwardsHero } from '@/components/AwwwardsHero';
+import { EditorialStorySection } from '@/components/EditorialStorySection';
+import { PersonChatView } from '@/components/PersonChatView';
+
 import {
   getPersonsAction,
   createPersonAction,
+  updatePersonSectionAction,
+  deletePersonPermanentlyAction,
   getPersonDetailsAction,
   seedDemoPersonAction,
   PersonCardSummary,
   GetPersonDetailsResponse,
 } from '@/app/actions/person.action';
-import { Plus, Sparkles, BookOpen, Search, ArrowRight } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Archive, Trash2 } from 'lucide-react';
 
 export default function HomePage() {
   const [persons, setPersons] = useState<PersonCardSummary[]>([]);
   const [activePersonId, setActivePersonId] = useState<string | null>(null);
   const [personDetails, setPersonDetails] = useState<GetPersonDetailsResponse | null>(null);
+  const [isAppStarted, setIsAppStarted] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'journal' | 'receipts' | 'reality_check' | 'add_receipt'>('journal');
   const [isAddPersonOpen, setIsAddPersonOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Section expand/collapse state
+  const [isArchivedExpanded, setIsArchivedExpanded] = useState(false);
+  const [isDeletedExpanded, setIsDeletedExpanded] = useState(false);
+
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedPersonId, setDraggedPersonId] = useState<string | null>(null);
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'soft' | 'permanent';
+    personId: string;
+    personName: string;
+  }>({
+    isOpen: false,
+    type: 'soft',
+    personId: '',
+    personName: '',
+  });
+
+  // Transition overlay & gallery container refs
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const transitionOverlayRef = useRef<HTMLDivElement>(null);
+  const cardsContainerRef = useRef<HTMLDivElement>(null);
 
   // Load people list from server action
   const loadPersons = useCallback(async (selectPersonId?: string) => {
@@ -41,6 +74,9 @@ export default function HomePage() {
 
       if (selectPersonId !== undefined) {
         setActivePersonId(selectPersonId || null);
+        if (selectPersonId) {
+          setIsAppStarted(true);
+        }
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error loading people');
@@ -75,22 +111,117 @@ export default function HomePage() {
     }
   }, [activePersonId, loadActivePersonDetails]);
 
-  // Handler: Add new person
-  const handleAddPerson = async (data: {
-    name: string;
-    relationshipStatus: 'talking' | 'dating' | 'ex' | 'friend' | 'paused';
-    summary?: string;
-  }) => {
-    const res = await createPersonAction(data);
+  // Section updates
+  const handleUpdateSection = async (personId: string, targetSection: 'active' | 'archived' | 'deleted') => {
+    if (targetSection === 'deleted') {
+      const person = persons.find((p) => p.person_id === personId);
+      setConfirmModal({
+        isOpen: true,
+        type: 'soft',
+        personId,
+        personName: person?.name || 'this person',
+      });
+      return;
+    }
+
+    try {
+      const res = await updatePersonSectionAction({ personId, section: targetSection });
+      if (res.success) {
+        await loadPersons();
+      } else {
+        setError(res.error || 'Failed to update section');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error updating section');
+    }
+  };
+
+  const handleConfirmSoftDelete = async () => {
+    const { personId } = confirmModal;
+    setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+    try {
+      const res = await updatePersonSectionAction({ personId, section: 'deleted' });
+      if (res.success) {
+        await loadPersons();
+      } else {
+        setError(res.error || 'Failed to move to deleted');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error deleting person');
+    }
+  };
+
+  const handleRequestPermanentDelete = (personId: string) => {
+    const person = persons.find((p) => p.person_id === personId);
+    setConfirmModal({
+      isOpen: true,
+      type: 'permanent',
+      personId,
+      personName: person?.name || 'this person',
+    });
+  };
+
+  const handleConfirmPermanentDelete = async () => {
+    const { personId } = confirmModal;
+    setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+    try {
+      const res = await deletePersonPermanentlyAction({ personId });
+      if (res.success) {
+        await loadPersons();
+      } else {
+        setError(res.error || 'Failed to delete person permanently');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error deleting person');
+    }
+  };
+
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent, personId: string) => {
+    setIsDragging(true);
+    setDraggedPersonId(personId);
+    e.dataTransfer.setData('text/plain', personId);
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    setDraggedPersonId(null);
+  };
+
+  const handleDropOnSection = async (targetSection: 'active' | 'archived' | 'deleted') => {
+    if (!draggedPersonId) return;
+    const pId = draggedPersonId;
+    setIsDragging(false);
+    setDraggedPersonId(null);
+
+    const person = persons.find((p) => p.person_id === pId);
+    if (!person || person.section === targetSection) return;
+
+    if (targetSection === 'deleted') {
+      handleUpdateSection(pId, 'deleted');
+    } else {
+      await handleUpdateSection(pId, targetSection);
+    }
+  };
+
+  // Add new person handler
+  const handleAddPerson = async (data: { name: string; relationshipLabel?: string; summary?: string }) => {
+    const res = await createPersonAction({
+      name: data.name,
+      relationshipLabel: data.relationshipLabel,
+      summary: data.summary,
+      section: 'active',
+    });
     if (!res.success || !res.person) {
       throw new Error(res.error || 'Failed to create person');
     }
     await loadPersons(res.person.person_id);
     setActivePersonId(res.person.person_id);
+    setIsAppStarted(true);
     setActiveTab('journal');
   };
 
-  // Handler: Seed Arjun Demo
+  // Seed Arjun Demo handler
   const handleSeedDemo = async () => {
     try {
       setIsSeeding(true);
@@ -101,6 +232,7 @@ export default function HomePage() {
       }
       await loadPersons(res.personId);
       setActivePersonId(res.personId);
+      setIsAppStarted(true);
       setActiveTab('journal');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to seed demo data');
@@ -109,17 +241,158 @@ export default function HomePage() {
     }
   };
 
+  const hasAnimatedDashboardRef = useRef(false);
+
+  // GSAP Card Stagger Animation when Dashboard opens
+  useEffect(() => {
+    if (isAppStarted && !activePersonId && cardsContainerRef.current) {
+      const cards = cardsContainerRef.current.querySelectorAll('.person-card');
+      if (cards.length === 0) return;
+
+      if (hasAnimatedDashboardRef.current) {
+        gsap.set(cards, { opacity: 1, y: 0, clearProps: 'opacity,transform' });
+        return;
+      }
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReducedMotion) {
+        hasAnimatedDashboardRef.current = true;
+        gsap.set(cards, { opacity: 1, y: 0, clearProps: 'opacity,transform' });
+        return;
+      }
+
+      const ctx = gsap.context(() => {
+        hasAnimatedDashboardRef.current = true;
+        gsap.fromTo(
+          cards,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.35,
+            stagger: 0.08,
+            ease: 'power2.out',
+            onComplete: () => {
+              gsap.set(cards, { opacity: 1, y: 0, clearProps: 'opacity,transform' });
+            },
+          }
+        );
+      }, cardsContainerRef);
+
+      return () => ctx.revert();
+    }
+  }, [isAppStarted, activePersonId, persons]);
+
+  // Cleanup transition overlay
+  useEffect(() => {
+    return () => {
+      setIsTransitioning(false);
+      if (transitionOverlayRef.current) {
+        gsap.killTweensOf(transitionOverlayRef.current);
+        transitionOverlayRef.current.style.display = 'none';
+      }
+    };
+  }, [activePersonId]);
+
+  // Handler: Get Started transition
+  const handleGetStarted = async () => {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion) {
+      setIsAppStarted(true);
+      setIsTransitioning(false);
+      if (persons.length === 0) {
+        await handleSeedDemo();
+      }
+      return;
+    }
+
+    setIsTransitioning(true);
+    
+    const safetyTimer = setTimeout(() => {
+      setIsAppStarted(true);
+      setIsTransitioning(false);
+      if (transitionOverlayRef.current) {
+        transitionOverlayRef.current.style.display = 'none';
+      }
+    }, 850);
+
+    if (transitionOverlayRef.current) {
+      transitionOverlayRef.current.style.display = 'block';
+      gsap.fromTo(
+        transitionOverlayRef.current,
+        { scale: 0, opacity: 1, display: 'block' },
+        {
+          scale: 2.8,
+          duration: 0.6,
+          ease: 'power2.inOut',
+          onComplete: async () => {
+            clearTimeout(safetyTimer);
+            setIsAppStarted(true);
+            if (persons.length === 0) {
+              await handleSeedDemo();
+            }
+            if (transitionOverlayRef.current) {
+              gsap.to(transitionOverlayRef.current, {
+                opacity: 0,
+                duration: 0.35,
+                onComplete: () => {
+                  setIsTransitioning(false);
+                  if (transitionOverlayRef.current) {
+                    transitionOverlayRef.current.style.display = 'none';
+                  }
+                },
+              });
+            } else {
+              setIsTransitioning(false);
+            }
+          },
+        }
+      );
+    } else {
+      clearTimeout(safetyTimer);
+      setIsAppStarted(true);
+      setIsTransitioning(false);
+      if (persons.length === 0) {
+        await handleSeedDemo();
+      }
+    }
+  };
+
+  const activePersons = persons.filter((p) => (p.section || 'active') === 'active');
+  const archivedPersons = persons.filter((p) => p.section === 'archived');
+  const deletedPersons = persons.filter((p) => p.section === 'deleted');
+
   const activePerson = persons.find((p) => p.person_id === activePersonId);
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-[#1C1917] flex flex-col font-sans selection:bg-[#C85A32]/20 selection:text-[#1C1917]">
+    <div className="min-h-screen bg-[#F8F6F1] text-[#18181B] flex flex-col font-sans selection:bg-[#C85A32]/20 selection:text-[#18181B]">
+      {/* Butter-Yellow Transition Overlay Circle */}
+      {isTransitioning && (
+        <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center overflow-hidden">
+          <div
+            ref={transitionOverlayRef}
+            className="w-[120vw] h-[120vw] rounded-full bg-[#FEF8E0] shadow-2xl pointer-events-none"
+            style={{ pointerEvents: 'none' }}
+          />
+        </div>
+      )}
+
       {/* Header */}
       <Header
         persons={persons}
         activePersonId={activePersonId}
+        isAppStarted={isAppStarted || Boolean(activePersonId)}
         onSelectPerson={(id) => {
           setActivePersonId(id);
+          if (id === null) {
+            setIsAppStarted(true);
+          }
           setActiveTab('journal');
+        }}
+        onGoToLanding={() => {
+          setActivePersonId(null);
+          setIsAppStarted(false);
         }}
         onOpenAddPerson={() => setIsAddPersonOpen(true)}
         onSeedDemo={handleSeedDemo}
@@ -127,393 +400,336 @@ export default function HomePage() {
       />
 
       {/* Main Container */}
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-8 py-10 sm:py-16 space-y-16">
+      <main className="w-full flex-1 flex flex-col items-center">
         {/* Error Banner */}
         {error && (
-          <div className="rounded-md bg-rose-500/10 border border-rose-500/20 p-4 text-xs font-mono text-rose-800 flex items-center justify-between">
-            <span>{error}</span>
-            <button onClick={() => setError(null)} className="underline font-medium uppercase tracking-wider">
-              Dismiss
-            </button>
+          <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 pt-6">
+            <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-4 text-xs font-sans text-rose-800 flex items-center justify-between">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="underline font-medium">
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
 
-        {/* HOMEPAGE VIEW (When no person is selected) */}
+        {/* 1. LANDING PAGE VIEW */}
         {!activePersonId && (
-          <div className="space-y-20 animate-fade-in">
-            {/* EDITORIAL HERO (Sketched Composition: Boy Doodle + THIRD WHEEL + Girl Doodle) */}
-            <section className="relative pt-6 pb-12 border-b border-[#E7E1D8] space-y-10">
-              {/* Flanking Doodles & Central Wordmark */}
-              <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center">
-                {/* Left Doodle (Boy) */}
-                <div className="hidden md:block w-36 h-36 shrink-0 transition-transform hover:scale-105 duration-300">
-                  <img 
-                    src="/illustrations/boy-doodle.svg" 
-                    alt="Boy doodle looking at wordmark" 
-                    className="w-full h-full object-contain opacity-90"
-                  />
-                </div>
-
-                {/* Central Brand Headline */}
-                <div className="space-y-4 max-w-2xl mx-auto">
-                  <div className="inline-block">
-                    <span className="text-[11px] font-mono tracking-widest text-[#C85A32] uppercase bg-[#FBF0EC] px-3.5 py-1 rounded-sm border border-[#C85A32]/30">
-                      PRIVATE MEMORY JOURNAL // NO ALGORITHMIC VIBES
-                    </span>
-                  </div>
-                  <h1 className="font-serif text-5xl sm:text-7xl font-normal tracking-tight text-[#1C1917] leading-[1.05]">
-                    THIRD WHEEL
-                  </h1>
-                  <p className="font-serif italic text-2xl sm:text-3xl text-[#78716C]">
-                    &ldquo;Receipts, not vibes.&rdquo;
-                  </p>
-                  <p className="font-serif text-xl sm:text-2xl text-[#1C1917] leading-relaxed pt-2">
-                    Remember what happened.<br />
-                    <span className="italic text-[#78716C] font-normal">Not what you think happened.</span>
-                  </p>
-                  <p className="text-sm text-[#57534E] font-sans leading-relaxed max-w-xl mx-auto pt-1">
-                    Third Wheel is your private AI relationship companion. It maintains an unvarnished, isolated memory ledger for each person in your life—separating recorded facts from unproven assumptions.
-                  </p>
-
-                  <div className="pt-4 flex flex-wrap items-center justify-center gap-4">
-                    <button
-                      onClick={handleSeedDemo}
-                      disabled={isSeeding}
-                      className="rounded-full bg-[#1C1917] hover:bg-[#332F2B] px-6 py-3 text-xs font-mono uppercase tracking-wider text-[#FAF8F5] transition shadow-xs inline-flex items-center gap-2"
-                    >
-                      <span>{isSeeding ? 'Loading demo...' : 'Explore Arjun Demo'}</span>
-                      <ArrowRight className="h-3.5 w-3.5 text-[#C85A32]" />
-                    </button>
-                    <button
-                      onClick={() => setIsAddPersonOpen(true)}
-                      className="rounded-full border border-[#E7E1D8] bg-[#FFFFFF] hover:bg-[#F4EFEA] px-6 py-3 text-xs font-mono uppercase tracking-wider text-[#1C1917] transition"
-                    >
-                      + Add Person
-                    </button>
-                  </div>
-                </div>
-
-                {/* Right Doodle (Girl) */}
-                <div className="hidden md:block w-36 h-36 shrink-0 transition-transform hover:scale-105 duration-300">
-                  <img 
-                    src="/illustrations/girl-doodle.svg" 
-                    alt="Girl doodle leaning on letter" 
-                    className="w-full h-full object-contain opacity-90"
-                  />
-                </div>
-              </div>
-
-              {/* Three Core Archival Principles */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-10 border-t border-[#E7E1D8]/60 text-left">
-                <div className="space-y-1.5 p-4 rounded-md bg-[#FFFFFF] border border-[#E7E1D8]">
-                  <span className="text-[11px] font-mono text-[#C85A32] uppercase tracking-widest block">01 / LITERAL RECEIPTS</span>
-                  <h4 className="font-serif text-lg font-medium text-[#1C1917]">Recorded Conversations</h4>
-                  <p className="text-xs text-[#78716C] leading-relaxed">Verbatim quotes and facts, completely isolated per person.</p>
-                </div>
-                <div className="space-y-1.5 p-4 rounded-md bg-[#FFFFFF] border border-[#E7E1D8]">
-                  <span className="text-[11px] font-mono text-[#C85A32] uppercase tracking-widest block">02 / PROVENANCE ANCHORS</span>
-                  <h4 className="font-serif text-lg font-medium text-[#1C1917]">Traceable Claims</h4>
-                  <p className="text-xs text-[#78716C] leading-relaxed">Every fact links back to its original raw interaction transcript.</p>
-                </div>
-                <div className="space-y-1.5 p-4 rounded-md bg-[#FFFFFF] border border-[#E7E1D8]">
-                  <span className="text-[11px] font-mono text-[#C85A32] uppercase tracking-widest block">03 / ANTI-METRICS</span>
-                  <h4 className="font-serif text-lg font-medium text-[#1C1917]">Zero Dating Scores</h4>
-                  <p className="text-xs text-[#78716C] leading-relaxed">No compatibility percentages, no match meters, zero gamification.</p>
-                </div>
-              </div>
-            </section>
-
-            {/* YOUR PEOPLE SECTION */}
-            <section className="space-y-8">
-              <div className="flex items-center justify-between border-b border-[#E7E1D8] pb-4">
-                <div>
-                  <span className="text-[11px] font-mono tracking-widest text-[#C85A32] uppercase">ARCHIVE SECTION // DOSSIERS</span>
-                  <h2 className="font-serif text-3xl font-medium tracking-tight text-[#1C1917] mt-0.5">
-                    Your People
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setIsAddPersonOpen(true)}
-                  className="text-xs font-mono tracking-wider uppercase text-[#C85A32] hover:underline"
-                >
-                  + Add person
-                </button>
-              </div>
-
-              {isLoading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="h-44 rounded-lg border border-[#E7E1D8] bg-[#FFFFFF] animate-pulse" />
-                  ))}
-                </div>
-              ) : persons.length === 0 ? (
-                <div className="rounded-lg border border-[#E7E1D8] bg-[#FFFFFF] p-12 text-center space-y-6">
-                  <img src="/illustrations/empty-waiting.svg" alt="Empty ledger" className="w-20 h-20 mx-auto opacity-75" />
-                  <div className="space-y-2 max-w-md mx-auto">
-                    <h3 className="font-serif text-2xl font-medium text-[#1C1917]">Your ledger is empty</h3>
-                    <p className="text-sm text-[#78716C] font-sans">
-                      Add the first person in your life to start recording receipts and keeping your memory grounded.
-                    </p>
-                  </div>
-                  <div className="pt-2 flex items-center justify-center gap-4">
-                    <button
-                      onClick={handleSeedDemo}
-                      disabled={isSeeding}
-                      className="rounded-md border border-[#E7E1D8] bg-[#FAF8F5] px-5 py-2.5 text-xs font-mono uppercase tracking-wider text-[#78716C] hover:text-[#1C1917] transition"
-                    >
-                      {isSeeding ? 'Loading demo...' : 'Load Arjun demo'}
-                    </button>
-                    <button
-                      onClick={() => setIsAddPersonOpen(true)}
-                      className="rounded-md bg-[#1C1917] hover:bg-[#332F2B] px-5 py-2.5 text-xs font-mono uppercase tracking-wider text-[#FAF8F5] transition shadow-xs"
-                    >
-                      + Add person
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {persons.map((p) => (
-                    <PersonCard
-                      key={p.person_id}
-                      person={p}
-                      isActive={p.person_id === activePersonId}
-                      onSelect={(id) => {
-                        setActivePersonId(id);
-                        setActiveTab('journal');
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
+          <div className={`w-full ${isAppStarted ? 'hidden' : 'block'}`}>
+            <AwwwardsHero onGetStarted={handleGetStarted} isSeeding={isSeeding} />
+            <EditorialStorySection onGetStarted={handleGetStarted} isSeeding={isSeeding} />
           </div>
         )}
 
-        {/* PERSON PAGE VIEW (Conversational Journal when a person is selected) */}
-        {activePersonId && activePerson && personDetails && personDetails.person && (
-          <div className="space-y-10 animate-fade-in">
-            {/* Person Header Banner */}
-            <section className="space-y-6 border-b border-[#E7E1D8] pb-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-[#FFFFFF] border border-[#E7E1D8] flex items-center justify-center p-2 shrink-0">
-                    <img 
-                      src={
-                        personDetails.person.name.toLowerCase().includes('arjun')
-                          ? '/illustrations/coffee-doodle.svg'
-                          : personDetails.person.name.toLowerCase().includes('rahul')
-                          ? '/illustrations/tennis-doodle.svg'
-                          : '/illustrations/third-wheel-mascot.svg'
-                      } 
-                      alt={personDetails.person.name} 
-                      className="w-full h-full object-contain opacity-85" 
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-baseline gap-3">
-                      <h1 className="font-serif text-4xl sm:text-5xl font-normal text-[#1C1917] tracking-tight">
-                        {personDetails.person.name}
-                      </h1>
-                      {personDetails.person.relationship_status && (
-                        <span className="text-xs font-mono tracking-widest text-[#C85A32] uppercase px-2.5 py-0.5 rounded-sm bg-[#FBF0EC] border border-[#C85A32]/30">
-                          {personDetails.person.relationship_status}
-                        </span>
-                      )}
-                    </div>
-                    {personDetails.person.summary && (
-                      <p className="text-sm text-[#78716C] font-serif italic mt-1 max-w-xl">
-                        &ldquo;{personDetails.person.summary}&rdquo;
-                      </p>
-                    )}
-                  </div>
-                </div>
+        {/* 2. PEOPLE DASHBOARD VIEW */}
+        {isAppStarted && !activePersonId && (
+          <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+            {/* Gallery Main Heading */}
+            <div className="flex items-baseline gap-3 border-b border-[#18181B]/15 pb-4">
+              <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight text-[#18181B]">
+                Your people
+              </h1>
+              <span className="font-sans text-xs italic text-[#78716C] tracking-wide">
+                remember what matters
+              </span>
+            </div>
 
-                <div className="flex items-center gap-3 self-start sm:self-auto">
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-44 rounded-[16px] border-[1.5px] border-[#18181B]/30 bg-[#FFFFFF] animate-pulse" />
+                ))}
+              </div>
+            ) : persons.length === 0 ? (
+              /* Zero State */
+              <div className="rounded-[24px] border-[1.5px] border-[#18181B] bg-[#FFFFFF] p-10 text-center space-y-6 shadow-[6px_6px_0px_#18181B] max-w-xl mx-auto my-8">
+                <img
+                  src="/illustrations/undraw_nice-to-meet-you_sqin.svg"
+                  alt="Add someone"
+                  className="w-40 h-40 mx-auto object-contain select-none"
+                />
+                <div className="space-y-2">
+                  <h3 className="font-serif text-2xl font-bold text-[#18181B]">
+                    Add someone to start keeping receipts.
+                  </h3>
+                  <p className="text-xs text-[#78716C] font-sans max-w-md mx-auto">
+                    Keep your memories grounded in facts, not assumptions.
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center justify-center gap-4">
                   <button
-                    onClick={() => setActiveTab('add_receipt')}
-                    className="rounded-md bg-[#1C1917] hover:bg-[#332F2B] px-5 py-2 text-xs font-mono uppercase tracking-wider text-[#FAF8F5] transition shadow-xs inline-flex items-center gap-2"
+                    onClick={handleSeedDemo}
+                    disabled={isSeeding}
+                    className="rounded-full border border-[#18181B] bg-[#FEF8E0] px-6 py-2.5 text-xs font-sans font-medium text-[#18181B] hover:bg-[#FDE68A] transition cursor-pointer"
                   >
-                    <Plus className="h-3.5 w-3.5 text-[#C85A32]" />
-                    <span>Log receipt</span>
+                    {isSeeding ? 'Loading demo...' : 'Load Arjun demo'}
+                  </button>
+                  <button
+                    onClick={() => setIsAddPersonOpen(true)}
+                    className="rounded-full border border-[#18181B] bg-[#18181B] hover:bg-[#C85A32] hover:border-[#C85A32] px-6 py-2.5 text-xs font-sans font-medium text-[#F8F6F1] transition shadow-xs cursor-pointer"
+                  >
+                    + Add person
                   </button>
                 </div>
               </div>
-
-              {/* Conversational Journal Navigation Bar */}
-              <div className="flex items-center gap-8 pt-4 text-xs font-mono tracking-wider border-t border-[#E7E1D8]/60 uppercase">
-                <button
-                  onClick={() => setActiveTab('journal')}
-                  className={`pb-2 transition inline-flex items-center gap-2 ${
-                    activeTab === 'journal'
-                      ? 'text-[#C85A32] font-semibold border-b-2 border-[#C85A32]'
-                      : 'text-[#78716C] hover:text-[#1C1917]'
+            ) : (
+              <div className="space-y-10" ref={cardsContainerRef}>
+                {/* SECTION 1: Active Connections */}
+                <section
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleDropOnSection('active')}
+                  className={`space-y-4 rounded-2xl p-2 transition-colors ${
+                    isDragging ? 'border-2 border-dashed border-[#C85A32]/50 bg-[#FEF8E0]/40' : ''
                   }`}
                 >
-                  <BookOpen className="h-3.5 w-3.5" />
-                  <span>Conversational Journal</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('receipts')}
-                  className={`pb-2 transition inline-flex items-center gap-2 ${
-                    activeTab === 'receipts'
-                      ? 'text-[#C85A32] font-semibold border-b-2 border-[#C85A32]'
-                      : 'text-[#78716C] hover:text-[#1C1917]'
-                  }`}
-                >
-                  <span>Receipts ({personDetails.memories?.length || 0})</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('reality_check')}
-                  className={`pb-2 transition inline-flex items-center gap-2 ${
-                    activeTab === 'reality_check'
-                      ? 'text-[#C85A32] font-semibold border-b-2 border-[#C85A32]'
-                      : 'text-[#78716C] hover:text-[#1C1917]'
-                  }`}
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>Reality Check</span>
-                </button>
-              </div>
-            </section>
-
-            {/* TAB CONTENTS */}
-
-            {/* CONVERSATIONAL JOURNAL STREAM (Core Page Feature) */}
-            {activeTab === 'journal' && (
-              <div className="space-y-10">
-                {/* Journal Inquiry Banner */}
-                <section className="rounded-lg border border-[#E7E1D8] bg-[#FFFFFF] p-7 sm:p-8 space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono tracking-widest text-[#C85A32] uppercase">
-                      MEMORY SPACE // {personDetails.person.name.toUpperCase()}
-                    </span>
-                    <img src="/illustrations/third-wheel-mascot.svg" alt="Mascot" className="w-8 h-8 opacity-80" />
+                    <h2 className="font-serif text-2xl font-bold text-[#18181B] flex items-center gap-2">
+                      <span>Active connections</span>
+                      <span className="text-sm font-sans font-medium text-[#78716C] bg-[#E7E1D8] px-2.5 py-0.5 rounded-full border border-[#18181B]/10">
+                        {activePersons.length}
+                      </span>
+                    </h2>
                   </div>
-                  <h3 className="font-serif text-2xl sm:text-3xl font-medium text-[#1C1917]">
-                    Ask your memory: &ldquo;What did {personDetails.person.name} say?&rdquo;
-                  </h3>
-                  <p className="text-sm text-[#78716C] font-sans leading-relaxed">
-                    Check what happened without emotional guesswork. Third Wheel compares your inquiry against all recorded receipt transcripts.
-                  </p>
-                  <div className="pt-2">
-                    <button
-                      onClick={() => setActiveTab('reality_check')}
-                      className="rounded-md bg-[#C85A32] hover:bg-[#A23E18] px-6 py-2.5 text-xs font-mono uppercase tracking-wider text-white transition inline-flex items-center gap-2"
+
+                  {/* 3 cards per row desktop, 2 tablet, 1 mobile */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {activePersons.map((p) => (
+                      <PersonCard
+                        key={p.person_id}
+                        person={p}
+                        isActive={p.person_id === activePersonId}
+                        onSelect={(id) => {
+                          setActivePersonId(id);
+                          setActiveTab('journal');
+                        }}
+                        onUpdateSection={handleUpdateSection}
+                        onDeletePermanently={handleRequestPermanentDelete}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                      />
+                    ))}
+
+                    {/* Smaller Dashed "Add person" Tile */}
+                    <div
+                      onClick={() => setIsAddPersonOpen(true)}
+                      className="person-card group border-[2px] border-dashed border-[#18181B]/35 hover:border-[#18181B] bg-[#FAF8F5]/80 hover:bg-[#FFFFFF] rounded-[16px] p-4 flex flex-col items-center justify-center text-center cursor-pointer min-h-[160px] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-[4px_4px_0px_#18181B]"
                     >
-                      <Search className="h-3.5 w-3.5" />
-                      <span>Run Reality Check →</span>
-                    </button>
+                      <div className="w-10 h-10 rounded-full bg-[#FEF8E0] border border-[#18181B]/20 flex items-center justify-center text-[#C85A32] group-hover:scale-110 transition-transform">
+                        <Plus className="w-5 h-5" />
+                      </div>
+                      <span className="font-sans font-bold text-xs text-[#18181B] mt-2.5 group-hover:text-[#C85A32]">
+                        + Add person
+                      </span>
+                    </div>
                   </div>
                 </section>
 
-                {/* Timeline Journal Stream */}
-                <section className="space-y-8">
-                  <div className="flex items-center justify-between border-b border-[#E7E1D8] pb-3">
-                    <h3 className="font-mono text-xs font-semibold uppercase tracking-wider text-[#78716C]">
-                      Journal Entry Stream & Provenance
-                    </h3>
-                    <button
-                      onClick={() => setActiveTab('receipts')}
-                      className="text-xs font-mono text-[#C85A32] hover:underline uppercase"
+
+                {/* SECTION 2: Archived */}
+                {(archivedPersons.length > 0 || isDragging) && (
+                  <section
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDropOnSection('archived')}
+                    className={`rounded-[18px] border-[1.5px] border-[#18181B] bg-[#FFFFFF] p-4 transition-all shadow-[3px_3px_0px_#18181B] ${
+                      isDragging ? 'border-2 border-dashed border-[#C85A32] bg-[#FEF8E0]' : ''
+                    }`}
+                  >
+                    <div
+                      onClick={() => setIsArchivedExpanded((prev) => !prev)}
+                      className="flex items-center justify-between cursor-pointer select-none"
                     >
-                      View all receipts &rarr;
-                    </button>
-                  </div>
+                      <div className="flex items-center gap-2">
+                        <Archive className="w-4 h-4 text-[#78716C]" />
+                        <h2 className="font-serif text-xl font-bold text-[#18181B]">Archived</h2>
+                        <span className="text-xs font-sans font-medium text-[#78716C] bg-[#E7E1D8] px-2 py-0.5 rounded-full border border-[#18181B]/10">
+                          {archivedPersons.length}
+                        </span>
+                      </div>
 
-                  {(!personDetails.memories || personDetails.memories.length === 0) ? (
-                    <div className="py-12 text-center rounded-lg border border-[#E7E1D8] bg-[#FFFFFF]">
-                      <img src="/illustrations/remembering.svg" alt="No entries" className="w-14 h-14 mx-auto opacity-70 mb-3" />
-                      <p className="font-serif italic text-base text-[#78716C]">
-                        No receipts logged yet for {personDetails.person.name}.
-                      </p>
-                      <button
-                        onClick={() => setActiveTab('add_receipt')}
-                        className="mt-4 text-xs font-mono text-[#C85A32] hover:underline uppercase"
-                      >
-                        + Log first receipt
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {isDragging && (
+                          <span className="text-xs font-sans font-bold text-[#C85A32] animate-pulse">
+                            Drop to archive
+                          </span>
+                        )}
+                        <button className="p-1 text-[#78716C] hover:text-[#18181B]">
+                          {isArchivedExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-8 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-px before:bg-[#E7E1D8]">
-                      {personDetails.memories.map((mem, index) => {
-                        const formattedDate = new Date(mem.created_at).toLocaleDateString('en-US', {
-                          month: 'long',
-                          day: 'numeric',
-                          year: 'numeric',
-                        });
 
-                        return (
-                          <article key={mem.memory_id} className="relative pl-10 space-y-2">
-                            {/* Dot on timeline */}
-                            <div className="absolute left-2.5 top-1.5 w-3 h-3 rounded-full bg-[#C85A32] border-2 border-[#FAF8F5]" />
+                    {/* Drag drop zone prompt when dragging and section empty */}
+                    {isDragging && archivedPersons.length === 0 && !isArchivedExpanded && (
+                      <div className="mt-3 p-4 border-2 border-dashed border-[#C85A32] rounded-xl text-center text-xs font-sans font-bold text-[#C85A32] bg-[#FEF8E0]/60">
+                        Drop to archive
+                      </div>
+                    )}
 
-                            <div className="flex items-center gap-3">
-                              <span className="text-[11px] font-mono text-[#78716C] uppercase tracking-wider">
-                                {formattedDate}
-                              </span>
-                              <span className="text-[10px] font-mono text-[#C85A32] uppercase tracking-widest px-2 py-0.5 rounded-sm bg-[#FBF0EC] border border-[#C85A32]/20">
-                                {mem.memory_type || 'FACT'}
-                              </span>
+                    {/* Collapsed Compact Strip */}
+                    {!isArchivedExpanded && archivedPersons.length > 0 && (
+                      <div className="mt-3 flex items-center gap-2.5 flex-wrap pt-2 border-t border-[#18181B]/10">
+                        {archivedPersons.map((p) => {
+                          const { doodleSrc, avatarBg } = getAvatarForPerson(p);
+                          return (
+                            <div
+                              key={p.person_id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsArchivedExpanded(true);
+                              }}
+                              className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-[#18181B]/20 hover:border-[#18181B] hover:bg-[#FEF8E0] transition cursor-pointer text-xs font-sans font-medium text-[#18181B]"
+                            >
+                              <div className={`w-6 h-6 rounded-full ${avatarBg} border border-[#18181B]/20 p-0.5 overflow-hidden shrink-0`}>
+                                <img src={doodleSrc} alt={p.name} className="w-full h-full object-contain" />
+                              </div>
+                              <span>{p.name}</span>
                             </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
-                            <div className="rounded-lg border border-[#E7E1D8] bg-[#FFFFFF] p-6 space-y-2">
-                              <p className="font-serif text-xl text-[#1C1917] leading-relaxed italic">
-                                &ldquo;{mem.content}&rdquo;
-                              </p>
-                              <div className="text-[11px] font-mono text-[#A8A29E] pt-2 border-t border-[#E7E1D8]/60 flex items-center justify-between">
-                                <span>Anchor: interaction #{mem.source_interaction_id.slice(-6)}</span>
+                    {/* Expanded Grid */}
+                    {isArchivedExpanded && archivedPersons.length > 0 && (
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pt-3 border-t border-[#18181B]/10">
+                        {archivedPersons.map((p) => (
+                          <PersonCard
+                            key={p.person_id}
+                            person={p}
+                            isActive={p.person_id === activePersonId}
+                            onSelect={(id) => {
+                              setActivePersonId(id);
+                              setActiveTab('journal');
+                            }}
+                            onUpdateSection={handleUpdateSection}
+                            onDeletePermanently={handleRequestPermanentDelete}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
+
+
+                {/* SECTION 3: Deleted */}
+                {(deletedPersons.length > 0 || isDragging) && (
+                  <section
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDropOnSection('deleted')}
+                    className={`rounded-[18px] border-[1.5px] border-[#18181B]/60 bg-[#FAF8F5] p-4 transition-all shadow-[3px_3px_0px_#18181B]/40 opacity-90 ${
+                      isDragging ? 'border-2 border-dashed border-rose-600 bg-rose-50/50' : ''
+                    }`}
+                  >
+                    <div
+                      onClick={() => setIsDeletedExpanded((prev) => !prev)}
+                      className="flex items-center justify-between cursor-pointer select-none"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Trash2 className="w-4 h-4 text-rose-700" />
+                        <h2 className="font-serif text-xl font-bold text-[#18181B]">Deleted</h2>
+                        <span className="text-xs font-sans font-medium text-rose-800 bg-rose-100 px-2 py-0.5 rounded-full border border-rose-300">
+                          {deletedPersons.length}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {isDragging && (
+                          <span className="text-xs font-sans font-bold text-rose-700 animate-pulse">
+                            Drop to move to trash
+                          </span>
+                        )}
+                        <button className="p-1 text-[#78716C] hover:text-[#18181B]">
+                          {isDeletedExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Drag drop zone prompt when dragging and section empty */}
+                    {isDragging && deletedPersons.length === 0 && !isDeletedExpanded && (
+                      <div className="mt-3 p-4 border-2 border-dashed border-rose-500 rounded-xl text-center text-xs font-sans font-bold text-rose-700 bg-rose-50">
+                        Drop to move to trash
+                      </div>
+                    )}
+
+                    {/* Collapsed Compact Strip */}
+                    {!isDeletedExpanded && deletedPersons.length > 0 && (
+                      <div className="mt-3 flex items-center gap-2.5 flex-wrap pt-2 border-t border-[#18181B]/10">
+                        {deletedPersons.map((p) => {
+                          const { doodleSrc, avatarBg } = getAvatarForPerson(p);
+                          return (
+                            <div
+                              key={p.person_id}
+                              className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#FFFFFF] border border-[#18181B]/20 text-xs font-sans font-medium text-[#18181B]"
+                            >
+                              <div className={`w-6 h-6 rounded-full ${avatarBg} border border-[#18181B]/20 p-0.5 overflow-hidden shrink-0`}>
+                                <img src={doodleSrc} alt={p.name} className="w-full h-full object-contain" />
+                              </div>
+                              <span>{p.name}</span>
+                              <div className="flex items-center gap-1.5 ml-1 border-l border-[#18181B]/15 pl-2">
                                 <button
-                                  onClick={() => setActiveTab('receipts')}
-                                  className="text-[#C85A32] hover:underline uppercase"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateSection(p.person_id, 'active');
+                                  }}
+                                  className="text-[11px] text-[#C85A32] font-bold hover:underline"
                                 >
-                                  View provenance &rarr;
+                                  Restore
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRequestPermanentDelete(p.person_id);
+                                  }}
+                                  className="text-[11px] text-rose-700 font-bold hover:underline"
+                                >
+                                  Delete permanently
                                 </button>
                               </div>
                             </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Expanded Grid */}
+                    {isDeletedExpanded && deletedPersons.length > 0 && (
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pt-3 border-t border-[#18181B]/10">
+                        {deletedPersons.map((p) => (
+                          <PersonCard
+                            key={p.person_id}
+                            person={p}
+                            isActive={p.person_id === activePersonId}
+                            onSelect={(id) => {
+                              setActivePersonId(id);
+                              setActiveTab('journal');
+                            }}
+                            onUpdateSection={handleUpdateSection}
+                            onDeletePermanently={handleRequestPermanentDelete}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
               </div>
             )}
-
-            {/* RECEIPTS TAB */}
-            {activeTab === 'receipts' && (
-              <MemoryVaultSection
-                key={activePersonId}
-                personName={personDetails.person.name}
-                memories={personDetails.memories || []}
-                openThreads={personDetails.openThreads || []}
-                events={personDetails.events || []}
-              />
-            )}
-
-            {/* REALITY CHECK TAB */}
-            {activeTab === 'reality_check' && (
-              <RealityCheckSection
-                key={activePersonId}
-                personId={activePersonId}
-                personName={personDetails.person.name}
-              />
-            )}
-
-            {/* ADD RECEIPT TAB */}
-            {activeTab === 'add_receipt' && (
-              <AddReceiptSection
-                key={activePersonId}
-                personId={activePersonId}
-                personName={personDetails.person.name}
-                onInteractionIngested={async () => {
-                  await loadActivePersonDetails();
-                  await loadPersons(activePersonId);
-                  setActiveTab('journal');
-                }}
-              />
-            )}
           </div>
+        )}
+
+        {/* PERSON PAGE VIEW */}
+        {activePersonId && activePerson && (
+          <PersonChatView
+            person={activePerson}
+            initialMemories={personDetails?.memories || []}
+            initialInteractions={personDetails?.interactions || []}
+            initialRealityChecks={personDetails?.realityChecks || []}
+            onBack={() => setActivePersonId(null)}
+            onRefreshPersonDetails={() => loadPersons(activePersonId)}
+          />
         )}
       </main>
 
@@ -523,7 +739,23 @@ export default function HomePage() {
         onClose={() => setIsAddPersonOpen(false)}
         onAddPerson={handleAddPerson}
       />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.type === 'soft' ? 'Move to Trash?' : `Delete ${confirmModal.personName} permanently?`}
+        message={
+          confirmModal.type === 'soft'
+            ? `Are you sure you want to move ${confirmModal.personName} to Deleted? You can restore them anytime from the Deleted section.`
+            : `Are you sure you want to permanently delete ${confirmModal.personName}? This will remove ${confirmModal.personName} AND all of their saved receipts, memories, and open threads. This action cannot be undone.`
+        }
+        confirmLabel={confirmModal.type === 'soft' ? 'Move to Trash' : 'Delete permanently'}
+        confirmVariant={confirmModal.type === 'soft' ? 'warning' : 'danger'}
+        onConfirm={confirmModal.type === 'soft' ? handleConfirmSoftDelete : handleConfirmPermanentDelete}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }
+
 
