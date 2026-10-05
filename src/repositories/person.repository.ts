@@ -26,10 +26,18 @@ export class PersonRepository {
     const personId = generateId('person');
     const now = new Date();
 
+    const label =
+      validated.relationship_label?.trim() ||
+      (validated.relationship_status
+        ? validated.relationship_status.charAt(0).toUpperCase() + validated.relationship_status.slice(1)
+        : undefined);
+
     const doc: PersonDocument = {
       user_id: authUser.user_id,
       person_id: personId,
       name: validated.name,
+      section: validated.section || 'active',
+      relationship_label: label,
       relationship_status: validated.relationship_status,
       summary: validated.summary,
       created_at: now,
@@ -50,6 +58,33 @@ export class PersonRepository {
       .find({ user_id: authUser.user_id })
       .sort({ created_at: -1 })
       .toArray();
+  }
+
+  /**
+   * Updates a person's section (active, archived, deleted) and manages deleted_at timestamp.
+   */
+  async updatePersonSection(personId: string, section: 'active' | 'archived' | 'deleted'): Promise<boolean> {
+    const authUser = await getAuthUser();
+    if (!personId) throw new Error('person_id is required');
+
+    const filter = { user_id: authUser.user_id, person_id: personId };
+    const now = new Date();
+
+    const updateDoc: Record<string, any> = {
+      $set: {
+        section,
+        updated_at: now,
+      },
+    };
+
+    if (section === 'deleted') {
+      updateDoc.$set.deleted_at = now;
+    } else {
+      updateDoc.$unset = { deleted_at: '' };
+    }
+
+    const res = await this.db.collection<PersonDocument>('persons').updateOne(filter, updateDoc);
+    return res.modifiedCount > 0 || res.matchedCount > 0;
   }
 
   /**
