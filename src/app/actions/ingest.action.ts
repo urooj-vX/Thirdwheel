@@ -38,6 +38,8 @@ export interface IngestInteractionResponse {
 export async function ingestInteractionAction(
   params: IngestInteractionParams
 ): Promise<IngestInteractionResponse> {
+  const tActionStart = performance.now();
+
   // Step 1: Server-side Authentication (Client payload user_id ignored)
   const authUser = await getAuthUser();
   if (!authUser || !authUser.user_id) {
@@ -55,27 +57,37 @@ export async function ingestInteractionAction(
   const interactionRepo = await getInteractionRepository();
 
   // Step 2: Verify Person Ownership for Authenticated User
+  const tDbPersonStart = performance.now();
   const person = await personRepo.getPersonById(validatedInput.person_id);
+  const tDbPersonDuration = performance.now() - tDbPersonStart;
+  console.log(`[TIMING] [DB] getPersonById | Duration: ${tDbPersonDuration.toFixed(2)}ms`);
+
   if (!person) {
     throw new Error(`Person not found or access denied for person_id: ${validatedInput.person_id}`);
   }
 
   // Step 3: Persist Raw Interaction FIRST (Guarantees no raw data loss if AI fails)
+  const tDbInteractionStart = performance.now();
   const rawInteraction = await interactionRepo.createInteraction({
     person_id: person.person_id,
     source_type: validatedInput.source_type,
     raw_content: validatedInput.raw_content,
   });
+  const tDbInteractionDuration = performance.now() - tDbInteractionStart;
+  console.log(`[TIMING] [DB] createInteraction | Duration: ${tDbInteractionDuration.toFixed(2)}ms`);
 
   // Step 4: AI Extraction with Gemma
   let extractionResult: ExtractionResult;
   try {
     const aiProvider = getAIProvider();
+    const tAiStart = performance.now();
     extractionResult = await aiProvider.extractInteraction({
       rawContent: rawInteraction.raw_content,
       sourceType: rawInteraction.source_type,
       personName: person.name,
     });
+    const tAiDuration = performance.now() - tAiStart;
+    console.log(`[TIMING] [AI] extractInteraction Pipeline Step | Duration: ${tAiDuration.toFixed(2)}ms`);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'AI Extraction Failed';
     // Raw interaction remains safely persisted in MongoDB!
@@ -91,61 +103,61 @@ export async function ingestInteractionAction(
   const eventRepo = await getEventRepository();
   const openThreadRepo = await getOpenThreadRepository();
 
-  // Persist FACTS
-  for (const fact of extractionResult.facts) {
-    await memoryRepo.createMemory({
-      person_id: person.person_id,
-      source_interaction_id: rawInteraction.interaction_id,
-      category: 'fact',
-      memory_type: fact.memory_type || 'fact',
-      content: fact.content,
-      confidence: fact.confidence,
-    });
-  }
+  const tDbPersistStart = performance.now();
+  // Persist all extracted records concurrently with Promise.all
+  await Promise.all([
+    ...extractionResult.facts.map((fact) =>
+      memoryRepo.createMemory({
+        person_id: person.person_id,
+        source_interaction_id: rawInteraction.interaction_id,
+        category: 'fact',
+        memory_type: fact.memory_type || 'fact',
+        content: fact.content,
+        confidence: fact.confidence,
+      })
+    ),
+    ...extractionResult.assumptions.map((assumption) =>
+      memoryRepo.createMemory({
+        person_id: person.person_id,
+        source_interaction_id: rawInteraction.interaction_id,
+        category: 'assumption',
+        memory_type: 'assumption',
+        content: assumption.content,
+        confidence: assumption.confidence,
+      })
+    ),
+    ...extractionResult.uncertainties.map((uncertainty) =>
+      memoryRepo.createMemory({
+        person_id: person.person_id,
+        source_interaction_id: rawInteraction.interaction_id,
+        category: 'uncertainty',
+        memory_type: 'uncertainty',
+        content: uncertainty.content,
+        confidence: uncertainty.confidence,
+      })
+    ),
+    ...extractionResult.events.map((event) =>
+      eventRepo.createEvent({
+        person_id: person.person_id,
+        source_interaction_id: rawInteraction.interaction_id,
+        title: event.title,
+        description: event.description,
+        event_date: event.event_date ? new Date(event.event_date) : undefined,
+      })
+    ),
+    ...extractionResult.open_threads.map((thread) =>
+      openThreadRepo.createOpenThread({
+        person_id: person.person_id,
+        source_interaction_id: rawInteraction.interaction_id,
+        topic: thread.topic,
+      })
+    ),
+  ]);
+  const tDbPersistDuration = performance.now() - tDbPersistStart;
+  console.log(`[TIMING] [DB] persistExtractedMemories | Items: ${extractionResult.facts.length + extractionResult.assumptions.length + extractionResult.uncertainties.length} | Duration: ${tDbPersistDuration.toFixed(2)}ms`);
 
-  // Persist ASSUMPTIONS
-  for (const assumption of extractionResult.assumptions) {
-    await memoryRepo.createMemory({
-      person_id: person.person_id,
-      source_interaction_id: rawInteraction.interaction_id,
-      category: 'assumption',
-      memory_type: 'assumption',
-      content: assumption.content,
-      confidence: assumption.confidence,
-    });
-  }
-
-  // Persist UNCERTAINTIES
-  for (const uncertainty of extractionResult.uncertainties) {
-    await memoryRepo.createMemory({
-      person_id: person.person_id,
-      source_interaction_id: rawInteraction.interaction_id,
-      category: 'uncertainty',
-      memory_type: 'uncertainty',
-      content: uncertainty.content,
-      confidence: uncertainty.confidence,
-    });
-  }
-
-  // Persist EVENTS
-  for (const event of extractionResult.events) {
-    await eventRepo.createEvent({
-      person_id: person.person_id,
-      source_interaction_id: rawInteraction.interaction_id,
-      title: event.title,
-      description: event.description,
-      event_date: event.event_date ? new Date(event.event_date) : undefined,
-    });
-  }
-
-  // Persist OPEN THREADS
-  for (const thread of extractionResult.open_threads) {
-    await openThreadRepo.createOpenThread({
-      person_id: person.person_id,
-      source_interaction_id: rawInteraction.interaction_id,
-      topic: thread.topic,
-    });
-  }
+  const tActionTotal = performance.now() - tActionStart;
+  console.log(`[TIMING] [ACTION] ingestInteractionAction TOTAL | Duration: ${tActionTotal.toFixed(2)}ms`);
 
   // Step 7: Return Response
   return serialize({
