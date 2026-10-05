@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-  <!-- Hand-drawn searching magnifying glass & person -->
-  <circle cx="50" cy="50" r="28" stroke="#1C1917" stroke-width="3" fill="#F4EFEA"/>
-  <circle cx="50" cy="50" r="20" stroke="#C85A32" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <path stroke="#1C1917" stroke-width="4" d="M 70 70 L 98 98" />
-  <!-- Sparkles/Receipt lines under lens -->
-  <path stroke="#C85A32" stroke-width="2" d="M 40 44 L 60 44 M 36 52 L 54 52 M 42 60 L 58 60" />
-</svg>

@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-  <!-- Hand-drawn coffee cup -->
-  <path stroke="#1C1917" stroke-width="2" d="M 15 22 L 18 48 C 18 52, 42 52, 42 48 L 45 22 Z" fill="#F4EFEA"/>
-  <path stroke="#1C1917" stroke-width="2" d="M 45 26 C 52 26, 52 38, 44 40" />
-  <!-- Steam lines -->
-  <path stroke="#C85A32" stroke-width="1.5" d="M 24 16 Q 22 10 26 6 M 34 16 Q 32 10 36 6" />
-</svg>
