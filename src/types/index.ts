@@ -7,14 +7,18 @@ export interface UserDocument {
 }
 
 export type RelationshipStatus = 'talking' | 'dating' | 'ex' | 'friend' | 'paused';
+export type PersonSection = 'active' | 'archived' | 'deleted';
 
 export interface PersonDocument {
   _id?: string;
   user_id: string;
   person_id: string;
   name: string;
-  relationship_status: RelationshipStatus;
+  section?: PersonSection;
+  relationship_label?: string;
+  relationship_status?: RelationshipStatus;
   summary?: string;
+  deleted_at?: Date;
   created_at: Date;
   updated_at: Date;
 }
@@ -81,6 +85,22 @@ export interface OpenThreadDocument {
   topic: string;
   status: ThreadStatus;
   last_updated: Date;
+}
+
+export interface RealityCheckDocument {
+  _id?: string;
+  user_id: string;
+  person_id: string;
+  reality_check_id: string;
+  interaction_id?: string;
+  query: string;
+  conclusion: string;
+  known_facts: string[];
+  assumptions: string[];
+  unknowns: string[];
+  evidence_strength?: string;
+  closing_quote?: string;
+  created_at: Date;
 }
 
 export interface EmbeddingDocument {

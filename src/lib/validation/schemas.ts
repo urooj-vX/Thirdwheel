@@ -2,9 +2,11 @@ import { z } from 'zod';
 
 export const CreatePersonInputSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
+  relationship_label: z.string().max(60).optional(),
   relationship_status: z
     .enum(['talking', 'dating', 'ex', 'friend', 'paused'])
-    .default('talking'),
+    .optional(),
+  section: z.enum(['active', 'archived', 'deleted']).default('active'),
   summary: z.string().max(500).optional(),
 });
 
@@ -101,6 +103,7 @@ export type ExtractionResult = z.infer<typeof ExtractionResultSchema>;
 export const RealityCheckInputSchema = z.object({
   person_id: z.string().min(1, 'person_id is required'),
   query: z.string().min(1, 'query is required').max(500),
+  new_message_content: z.string().optional(),
 });
 
 export type RealityCheckInput = z.infer<typeof RealityCheckInputSchema>;
