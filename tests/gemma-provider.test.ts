@@ -12,9 +12,9 @@ describe('GemmaAIProvider Unit Test Suite (Mocked Network)', () => {
     global.fetch = originalFetch;
   });
 
-  it('1. Initializes with default gemma-4-31b-it model and native generateContent endpoint structure', () => {
+  it('1. Initializes with default gemini-3.6-flash model and native generateContent endpoint structure', () => {
     const provider = new GemmaAIProvider({ apiKey: 'test_api_key' });
-    expect(provider.modelName).toBe('gemma-4-31b-it');
+    expect(provider.modelName).toBe('gemini-3.6-flash');
   });
 
   it('2. Throws explicit configuration error if API key is missing', async () => {
