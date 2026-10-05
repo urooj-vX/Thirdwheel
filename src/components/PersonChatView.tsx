@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import gsap from 'gsap';
-import { ArrowLeft, Send, Plus, History, X, AlertTriangle, Quote, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Send, Plus, History, X, AlertTriangle, Quote, Sparkles, RefreshCw, Mic, Square, Loader2 } from 'lucide-react';
 import { PersonDocument, MemoryDocument, InteractionDocument, RealityCheckDocument } from '@/types';
 import { ingestInteractionAction } from '@/app/actions/ingest.action';
 import { runRealityCheckAction } from '@/app/actions/reality-check.action';
 import { getPersonDetailsAction, PersonCardSummary } from '@/app/actions/person.action';
+import { transcribeAudioAction } from '@/app/actions/transcribe.action';
 import { getAvatarForPerson } from '@/lib/avatars';
 import { RealityCheckResult } from '@/lib/validation/schemas';
 import { isQuestion } from '@/lib/ai/utils';
@@ -64,6 +65,109 @@ export function PersonChatView({
 
   const [statusStepMessage, setStatusStepMessage] = useState<string>('Looking at the receipts...');
   const [expandedEvidence, setExpandedEvidence] = useState<{ [msgId: string]: boolean }>({});
+
+  // Voice Input State & Refs
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startRecording = async () => {
+    try {
+      setVoiceError(null);
+      if (typeof window === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setVoiceError("Microphone access is not supported on this device/browser.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      let mimeType = 'audio/webm';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Stop audio track recording
+        stream.getTracks().forEach((track) => track.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (audioBlob.size === 0) {
+          setVoiceState('idle');
+          setVoiceError("Couldn't transcribe that. Try again.");
+          return;
+        }
+
+        setVoiceState('transcribing');
+
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          try {
+            const resultStr = (reader.result as string) || '';
+            const base64String = resultStr.includes(',') ? resultStr.split(',')[1] : resultStr;
+            const res = await transcribeAudioAction({
+              base64Audio: base64String,
+              mimeType,
+            });
+
+            if (res.success && res.transcript) {
+              setInputText((prev) => {
+                const trimmed = prev.trim();
+                return trimmed ? `${trimmed} ${res.transcript}` : res.transcript!;
+              });
+              setVoiceState('idle');
+              setTimeout(() => textareaRef.current?.focus(), 100);
+            } else {
+              setVoiceError(res.error || "Couldn't transcribe that. Try again.");
+              setVoiceState('idle');
+            }
+          } catch (err: unknown) {
+            console.error('[VOICE TRANSCRIBE ERROR]', err);
+            setVoiceError("Couldn't transcribe that. Try again.");
+            setVoiceState('idle');
+          }
+        };
+      };
+
+      mediaRecorder.start();
+      setVoiceState('recording');
+    } catch (err: unknown) {
+      console.error('[MICROPHONE PERMISSION ERROR]', err);
+      setVoiceError("Couldn't access microphone. Please check permissions.");
+      setVoiceState('idle');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const handleVoiceButtonClick = () => {
+    if (voiceState === 'idle') {
+      startRecording();
+    } else if (voiceState === 'recording') {
+      stopRecording();
+    }
+  };
 
   const toggleEvidence = (msgId: string) => {
     setExpandedEvidence((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
@@ -822,28 +926,112 @@ export function PersonChatView({
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* FIXED BOTTOM INPUT BAR */}
+        {/* FIXED BOTTOM INPUT BAR WITH VOICE CONTROL */}
         {/* ------------------------------------------------------------- */}
         <footer className="border-t-[1.5px] border-[#18181B] bg-[#FAF8F5] p-4 sm:p-5 shrink-0">
-          <div className="max-w-3xl mx-auto flex items-end gap-3">
-            <textarea
-              ref={textareaRef}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Tell me what happened…"
-              rows={2}
-              className="flex-1 bg-[#FFFFFF] border-[1.5px] border-[#18181B] rounded-2xl p-3.5 text-sm font-sans text-[#18181B] placeholder-[#78716C] focus:outline-none focus:ring-2 focus:ring-[#C85A32] resize-none shadow-[2px_2px_0px_#18181B]"
-            />
+          <div className="max-w-3xl mx-auto space-y-2.5">
+            {/* Status indicators for Voice Recording, Transcribing, or Errors */}
+            {voiceState === 'recording' && (
+              <div className="flex items-center justify-between text-xs font-sans font-medium text-rose-800 bg-rose-50 border border-rose-200 px-3.5 py-1.5 rounded-xl shadow-xs">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600" />
+                  </span>
+                  <span className="font-semibold">Recording…</span>
+                  <span className="text-rose-600/80 text-[11px] hidden sm:inline">(click mic or stop to finish)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="text-xs font-bold underline hover:text-rose-950 cursor-pointer"
+                >
+                  Done recording
+                </button>
+              </div>
+            )}
 
-            <button
-              onClick={() => handleSendMessage()}
-              disabled={!inputText.trim()}
-              className="h-12 px-6 rounded-2xl border-[1.5px] border-[#18181B] bg-[#18181B] text-[#F8F6F1] font-sans font-bold text-xs uppercase tracking-wider hover:bg-[#C85A32] hover:border-[#C85A32] disabled:opacity-40 disabled:hover:bg-[#18181B] transition inline-flex items-center gap-2 shrink-0 cursor-pointer shadow-[2px_2px_0px_#18181B]"
-            >
-              <span>Send</span>
-              <Send className="w-3.5 h-3.5" />
-            </button>
+            {voiceState === 'transcribing' && (
+              <div className="flex items-center gap-2 text-xs font-sans font-medium text-[#78716C] bg-[#FEF8E0] border border-[#18181B]/15 px-3.5 py-1.5 rounded-xl shadow-xs">
+                <Loader2 className="w-3.5 h-3.5 text-[#C85A32] animate-spin" />
+                <span>Transcribing audio…</span>
+              </div>
+            )}
+
+            {voiceError && (
+              <div className="flex items-center justify-between text-xs font-sans text-rose-800 bg-rose-50 border border-rose-200 px-3.5 py-1.5 rounded-xl shadow-xs">
+                <span>{voiceError}</span>
+                <button onClick={() => setVoiceError(null)} className="underline text-[11px] font-bold cursor-pointer">
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Input Controls Row */}
+            <div className="flex items-end gap-2.5">
+              <textarea
+                ref={textareaRef}
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  voiceState === 'recording'
+                    ? 'Listening to voice input…'
+                    : voiceState === 'transcribing'
+                    ? 'Transcribing speech…'
+                    : 'Tell me what happened…'
+                }
+                rows={2}
+                disabled={voiceState === 'transcribing'}
+                className="flex-1 bg-[#FFFFFF] border-[1.5px] border-[#18181B] rounded-2xl p-3.5 text-sm font-sans text-[#18181B] placeholder-[#78716C] focus:outline-none focus:ring-2 focus:ring-[#C85A32] resize-none shadow-[2px_2px_0px_#18181B] disabled:bg-[#FAF8F5]"
+              />
+
+              {/* Microphone Voice Input Button */}
+              <button
+                type="button"
+                onClick={handleVoiceButtonClick}
+                disabled={voiceState === 'transcribing'}
+                aria-label={
+                  voiceState === 'recording'
+                    ? 'Stop recording'
+                    : voiceState === 'transcribing'
+                    ? 'Transcribing'
+                    : 'Start voice input'
+                }
+                title={
+                  voiceState === 'recording'
+                    ? 'Stop recording'
+                    : voiceState === 'transcribing'
+                    ? 'Transcribing...'
+                    : 'Start voice input'
+                }
+                className={`h-12 w-12 rounded-2xl border-[1.5px] border-[#18181B] flex items-center justify-center transition shrink-0 cursor-pointer shadow-[2px_2px_0px_#18181B] ${
+                  voiceState === 'recording'
+                    ? 'bg-rose-500 text-white hover:bg-rose-600 border-rose-900 animate-pulse'
+                    : voiceState === 'transcribing'
+                    ? 'bg-[#FEF8E0] text-[#78716C] border-[#18181B]/40 cursor-wait'
+                    : 'bg-[#FEF8E0] text-[#18181B] hover:bg-[#FDE68A] hover:text-[#C85A32]'
+                }`}
+              >
+                {voiceState === 'recording' ? (
+                  <Square className="w-4 h-4 fill-current" />
+                ) : voiceState === 'transcribing' ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-[#C85A32]" />
+                ) : (
+                  <Mic className="w-4.5 h-4.5" />
+                )}
+              </button>
+
+              {/* Primary Send Button */}
+              <button
+                onClick={() => handleSendMessage()}
+                disabled={!inputText.trim() || voiceState === 'transcribing'}
+                className="h-12 px-6 rounded-2xl border-[1.5px] border-[#18181B] bg-[#18181B] text-[#F8F6F1] font-sans font-bold text-xs uppercase tracking-wider hover:bg-[#C85A32] hover:border-[#C85A32] disabled:opacity-40 disabled:hover:bg-[#18181B] transition inline-flex items-center gap-2 shrink-0 cursor-pointer shadow-[2px_2px_0px_#18181B]"
+              >
+                <span>Send</span>
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </footer>
       </main>
