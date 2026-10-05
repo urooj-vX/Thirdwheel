@@ -6,12 +6,12 @@ import { X } from 'lucide-react';
 interface AddPersonModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddPerson: (data: { name: string; relationshipStatus: 'talking' | 'dating' | 'ex' | 'friend' | 'paused'; summary?: string }) => Promise<void>;
+  onAddPerson: (data: { name: string; relationshipLabel?: string; summary?: string }) => Promise<void>;
 }
 
 export function AddPersonModal({ isOpen, onClose, onAddPerson }: AddPersonModalProps) {
   const [name, setName] = useState('');
-  const [relationshipStatus, setRelationshipStatus] = useState<'talking' | 'dating' | 'ex' | 'friend' | 'paused'>('talking');
+  const [relationshipLabel, setRelationshipLabel] = useState('');
   const [summary, setSummary] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,10 +30,11 @@ export function AddPersonModal({ isOpen, onClose, onAddPerson }: AddPersonModalP
       setError(null);
       await onAddPerson({
         name: name.trim(),
-        relationshipStatus,
+        relationshipLabel: relationshipLabel.trim() || undefined,
         summary: summary.trim() || undefined,
       });
       setName('');
+      setRelationshipLabel('');
       setSummary('');
       onClose();
     } catch (err: unknown) {
@@ -44,86 +45,83 @@ export function AddPersonModal({ isOpen, onClose, onAddPerson }: AddPersonModalP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1C1917]/50 backdrop-blur-xs p-4 animate-fade-in">
-      <div className="w-full max-w-md rounded-lg border border-[#E7E1D8] bg-[#FAF8F5] p-6 sm:p-8 shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#E7E1D8] pb-4">
-          <div>
-            <span className="text-[10px] font-mono tracking-widest text-[#C85A32] uppercase">DOSSIER CREATION</span>
-            <h3 className="font-serif text-2xl font-medium text-[#1C1917] mt-0.5">Add person</h3>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#18181B]/50 backdrop-blur-xs p-4 animate-fade-in">
+      <div className="w-full max-w-[420px] rounded-[20px] border-[1.5px] border-[#18181B] bg-[#FAF8F5] p-6 sm:p-7 shadow-[6px_6px_0px_#18181B] space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[#18181B]/15 pb-4">
+          <h3 className="font-serif text-2xl font-bold text-[#18181B]">Add person</h3>
           <button
             onClick={onClose}
-            className="rounded-full p-1.5 text-[#78716C] hover:bg-[#E7E1D8]/60 hover:text-[#1C1917] transition"
+            className="rounded-full p-1.5 text-[#78716C] hover:bg-[#E7E1D8] hover:text-[#18181B] transition"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="rounded-md bg-rose-500/10 border border-rose-500/20 p-3 text-xs font-mono text-rose-800">
+            <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-xs font-sans text-rose-800">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-mono text-[#78716C] uppercase tracking-wider mb-1.5">
-              Name / Alias *
+            <label className="block text-xs font-sans font-bold text-[#18181B] mb-1.5">
+              Name *
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Arjun, Rahul, Maya..."
+              placeholder="e.g. Rakesh, Ayaan..."
               required
-              className="w-full rounded-md border border-[#E7E1D8] bg-[#FFFFFF] px-4 py-2.5 text-sm text-[#1C1917] placeholder-[#A8A29E] focus:border-[#C85A32] focus:outline-none focus:ring-1 focus:ring-[#C85A32]/30 transition"
+              className="w-full rounded-xl border border-[#18181B]/30 bg-[#FFFFFF] px-3.5 py-2.5 text-sm font-sans text-[#18181B] placeholder-[#78716C] focus:border-[#C85A32] focus:outline-none focus:ring-2 focus:ring-[#C85A32]/20 transition shadow-2xs"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-mono text-[#78716C] uppercase tracking-wider mb-1.5">
-              Relationship Context
+            <label className="block text-xs font-sans font-bold text-[#18181B] mb-1.5">
+              How do you know them?
             </label>
-            <select
-              value={relationshipStatus}
-              onChange={(e) => setRelationshipStatus(e.target.value as any)}
-              className="w-full rounded-md border border-[#E7E1D8] bg-[#FFFFFF] px-4 py-2.5 text-sm text-[#1C1917] focus:border-[#C85A32] focus:outline-none focus:ring-1 focus:ring-[#C85A32]/30 transition cursor-pointer"
-            >
-              <option value="talking">Talking</option>
-              <option value="dating">Dating</option>
-              <option value="friend">Friend</option>
-              <option value="ex">Ex</option>
-              <option value="paused">Paused</option>
-            </select>
+            <input
+              type="text"
+              value={relationshipLabel}
+              onChange={(e) => setRelationshipLabel(e.target.value)}
+              maxLength={60}
+              placeholder="e.g. uncle, college friend, neighbor..."
+              className="w-full rounded-xl border border-[#18181B]/30 bg-[#FFFFFF] px-3.5 py-2.5 text-sm font-sans text-[#18181B] placeholder-[#78716C] focus:border-[#C85A32] focus:outline-none focus:ring-2 focus:ring-[#C85A32]/20 transition shadow-2xs"
+            />
           </div>
 
           <div>
-            <label className="block text-xs font-mono text-[#78716C] uppercase tracking-wider mb-1.5">
-              Initial Note (Optional)
+            <label className="block text-xs font-sans font-bold text-[#18181B] mb-1.5">
+              Anything worth remembering? (optional)
             </label>
             <textarea
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              placeholder="e.g. Coffee near campus..."
+              placeholder="e.g. usually calls on Sundays..."
               rows={2}
-              className="w-full rounded-md border border-[#E7E1D8] bg-[#FFFFFF] px-4 py-2.5 text-sm text-[#1C1917] placeholder-[#A8A29E] focus:border-[#C85A32] focus:outline-none focus:ring-1 focus:ring-[#C85A32]/30 transition font-serif"
+              className="w-full rounded-xl border border-[#18181B]/30 bg-[#FFFFFF] px-3.5 py-2.5 text-sm font-sans text-[#18181B] placeholder-[#78716C] focus:border-[#C85A32] focus:outline-none focus:ring-2 focus:ring-[#C85A32]/20 transition shadow-2xs resize-none"
             />
           </div>
 
+          {/* Action Buttons */}
           <div className="flex items-center justify-end gap-3 pt-3">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-[#E7E1D8] bg-[#FAF8F5] px-5 py-2 text-xs font-mono uppercase tracking-wider text-[#78716C] hover:bg-[#F4EFEA] hover:text-[#1C1917] transition"
+              className="rounded-full border border-[#18181B]/30 bg-[#FFFFFF] px-5 py-2 text-xs font-sans font-bold text-[#18181B] hover:bg-[#E7E1D8] transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-md bg-[#1C1917] hover:bg-[#332F2B] px-6 py-2 text-xs font-mono uppercase tracking-wider text-[#FAF8F5] transition disabled:opacity-50 shadow-xs"
+              className="rounded-full bg-[#18181B] hover:bg-[#C85A32] px-6 py-2 text-xs font-sans font-bold text-[#F8F6F1] transition disabled:opacity-50 shadow-xs cursor-pointer"
             >
-              {isSubmitting ? 'Saving...' : 'Create journal'}
+              {isSubmitting ? 'Creating...' : 'Create memory space'}
             </button>
           </div>
         </form>
@@ -131,5 +129,3 @@ export function AddPersonModal({ isOpen, onClose, onAddPerson }: AddPersonModalP
     </div>
   );
 }
-
-
