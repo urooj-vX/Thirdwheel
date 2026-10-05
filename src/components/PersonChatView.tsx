@@ -280,12 +280,13 @@ export function PersonChatView({
     // Restore persisted Reality Check if one exists for this interaction
     if (relatedRealityCheck) {
       const reconstructedResult: RealityCheckResult = {
-        conclusion: relatedRealityCheck.conclusion,
+        query: relatedRealityCheck.query || '',
+        conclusion: relatedRealityCheck.conclusion || '',
         known_facts: relatedRealityCheck.known_facts || [],
         assumptions: relatedRealityCheck.assumptions || [],
         unknowns: relatedRealityCheck.unknowns || [],
-        evidence_strength: (relatedRealityCheck.evidence_strength as any) || 'moderate',
-        closing_quote: relatedRealityCheck.closing_quote,
+        evidence_strength: (relatedRealityCheck.evidence_strength as any) || 'INSUFFICIENT',
+        closing_quote: relatedRealityCheck.closing_quote || '',
       };
 
       const realityMsg: ChatMessage = {
